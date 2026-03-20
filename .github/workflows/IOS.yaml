@@ -1,0 +1,36 @@
+name: iOS Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          # Remove local env files that can cause Node version conflicts
+          rm -f .xcode.env.local 
+          pod install --repo-update
+      - name: Build iOS App
+        run: |
+          xcodebuild -workspace ios/*.xcworkspace \
+            -scheme MYAPPIOS \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO \
+            build
