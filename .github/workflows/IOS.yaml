@@ -60,8 +60,8 @@ jobs:
           -sdk iphonesimulator \
           -derivedDataPath build \
           CODE_SIGNING_ALLOWED=NO \
-          build
-
+          clean build
+          
       # --- NEW: Upload the Build ---
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
