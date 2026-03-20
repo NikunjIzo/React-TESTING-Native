@@ -20,17 +20,38 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # --- NEW: Run Tests First ---
+      - name: Run Unit Tests
+        run: npm test
+
+      # --- NEW: Cache CocoaPods ---
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
       - name: Install CocoaPods
         run: |
           cd ios
-          # Remove local env files that can cause Node version conflicts
-          rm -f .xcode.env.local 
+          rm -f .xcode.env.local
           pod install --repo-update
+          
       - name: Build iOS App
         run: |
           xcodebuild -workspace ios/*.xcworkspace \
-            -scheme CICDRNApp \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+          -scheme CICDRNApp \
+          -configuration Debug \
+          -sdk iphonesimulator \
+          -derivedDataPath build \
+          CODE_SIGNING_ALLOWED=NO \
+          build
+
+      # --- NEW: Upload the Build ---
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-debug-app
+          path: build/Build/Products/Debug-iphonesimulator/*.app
