@@ -47,11 +47,6 @@ jobs:
           rm -f .xcode.env.local
           pod install --repo-update
       
-      - name: Clean build
-        run: |
-          cd ios
-          xcodebuild clean
-          
       - name: Build iOS App
         run: |
           xcodebuild -workspace ios/*.xcworkspace \
