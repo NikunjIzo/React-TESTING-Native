@@ -13,96 +13,95 @@ on:
           - both
 
 jobs:
-  # --- IOS JOB ---
-  build-ios:
-    name: Build iOS
-    if: ${{ github.event.inputs.platform == 'ios' || github.event.inputs.platform == 'both' }}
-    runs-on: macos-latest
+  # --- STAGE 1: Testing & Linting ---
+  # This runs first to make sure code is valid
+  install-and-test:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
       
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: 'npm'
-
+          
       - name: Install dependencies
         run: npm install
+      - name: Run Lint & Test
+        run: |
+          npm run lint
+          npm test
 
-      - name: Code Linting
-        run: npm run lint
+  # --- STAGE 2A: Android Build (Runs Parallel to iOS) ---
+  build-android:
+    needs: install-and-test # Only starts if tests pass
+    name: Build Android
+    if: ${{ github.event.inputs.platform == 'android' || github.event.inputs.platform == 'both' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle' # Speeds up future builds
+          
+      - name: Install Node Deps
+        run: npm install
+        
+      - name: Build Android Release
+        run: |
+          cd android
+          ./gradlew assembleDebug
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
 
-      # --- NEW: Run Tests First ---
-      - name: Run Unit Tests
-        run: npm test
-
-      # --- NEW: Cache CocoaPods ---
+  # --- STAGE 2B: iOS Build (Runs Parallel to Android) ---
+  build-ios:
+    needs: install-and-test # Only starts if tests pass
+    name: Build iOS
+    if: ${{ github.event.inputs.platform == 'ios' || github.event.inputs.platform == 'both' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          
+      - name: Install Node Deps
+        run: npm install
+        
       - name: Cache CocoaPods
         uses: actions/cache@v4
         with:
           path: ios/Pods
           key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pods-
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.1'
-      
-      - name: Install CocoaPods CLI
-        run: sudo gem install cocoapods
-      
-      - name: Install CocoaPods
+          
+      - name: Install Pods
         run: |
           cd ios
-          rm -f .xcode.env.local
           pod install --repo-update
-      
-      - name: Build iOS App
+          
+      - name: Build iOS
         run: |
-          cd ios
-          xcodebuild -workspace *.xcworkspace \
+          xcodebuild -workspace ios/*.xcworkspace \
             -scheme CICDRNApp \
             -configuration Debug \
             -sdk iphonesimulator \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             clean build
-
-  # --- ANDROID JOB ---
-  build-android:
-    name: Build Android
-    if: ${{ github.event.inputs.platform == 'android' || github.event.inputs.platform == 'both' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build Android Debug APK
-        run: |
-          cd android
-          ./gradlew assembleDebug
-
-      - name: Upload Android Artifact
+            
+      - name: Upload App
         uses: actions/upload-artifact@v4
         with:
-          name: android-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ios-debug-app
+          path: build/Build/Products/Debug-iphonesimulator/*.app
