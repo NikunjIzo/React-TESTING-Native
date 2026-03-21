@@ -1,4 +1,7 @@
 name: Multi-Platform Build
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 on:
   workflow_dispatch:
     inputs:
@@ -109,8 +112,10 @@ jobs:
           name: ios-debug-app
           path: build/Build/Products/Debug-iphonesimulator/*.app
 
+  # --- STAGE 3: Create Release ---
   create-release:
     needs: [build-android, build-ios]
+    # This runs if at least one build succeeded, even if the other was skipped
     if: always() && (needs.build-android.result == 'success' || needs.build-ios.result == 'success')
     runs-on: ubuntu-latest
     steps:
@@ -119,11 +124,24 @@ jobs:
         with:
           path: ./artifacts
 
-      - name: Create GitHub Release
+      - name: Delete Old Release
+        uses: dev-drprasad/delete-tag-and-release@v1.1
+        with:
+          tag_name: latest-build
+          delete_release: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Fresh Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: Build Release #${{ github.run_number }}
+          tag_name: latest-build
+          name: Latest Build (Run #${{ github.run_number }})
+          body: |
+            ## Build Summary
+            - **Platform:** ${{ github.event.inputs.platform }}
+            - **Run Number:** ${{ github.run_number }}
+            - **Status:** Completed Successfully
           draft: false
           prerelease: false
           files: |
