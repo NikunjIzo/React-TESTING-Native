@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24 # Updated to 24
+          node-version: 24
           cache: 'npm'
       - name: Install dependencies
         run: npm install
@@ -44,10 +44,10 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
           cache: 'gradle'
-      # - name: Setup Node
-      #   uses: actions/setup-node@v4
-      #   with:
-      #     node-version: 24 # Updated to 24
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Install Node Deps
         run: npm install
       - name: Grant Gradle permission
@@ -71,9 +71,11 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24 # Updated to 24
+          node-version: 24
       - name: Install Node Deps
         run: npm install
+      - name: Check for Missing Fonts
+        run: ls -R src/assets/fonts || echo "Fonts directory not found!"
       - name: Install Pods
         run: |
           cd ios
@@ -81,7 +83,7 @@ jobs:
       - name: Build iOS
         run: |
           xcodebuild -workspace ios/*.xcworkspace \
-            -scheme CICDRNApp \
+            -scheme ShareGo \
             -configuration Debug \
             -sdk iphonesimulator \
             -derivedDataPath build \
@@ -105,7 +107,7 @@ jobs:
 
       - name: Delete Old Release
         uses: dev-drprasad/delete-tag-and-release@v1.1
-        continue-on-error: true # <--- THIS PREVENTS THE ERROR YOU SAW
+        continue-on-error: true 
         with:
           tag_name: latest-build
           delete_release: true
