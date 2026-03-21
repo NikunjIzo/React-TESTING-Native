@@ -77,10 +77,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+      # - name: Setup Node
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: 18
           
       - name: Install Node Deps
         run: npm install
@@ -123,14 +123,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ./artifacts
-
-      - name: Delete Old Release
-        uses: dev-drprasad/delete-tag-and-release@v1.1
-        with:
-          tag_name: latest-build
-          delete_release: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Fresh Release
         uses: softprops/action-gh-release@v2
