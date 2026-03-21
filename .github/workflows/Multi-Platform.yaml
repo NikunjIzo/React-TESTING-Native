@@ -108,3 +108,26 @@ jobs:
         with:
           name: ios-debug-app
           path: build/Build/Products/Debug-iphonesimulator/*.app
+
+  create-release:
+    needs: [build-android, build-ios]
+    if: always() && (needs.build-android.result == 'success' || needs.build-ios.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build Release #${{ github.run_number }}
+          draft: false
+          prerelease: false
+          files: |
+            ./artifacts/android-debug-apk/*.apk
+            ./artifacts/ios-debug-app/*.app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
