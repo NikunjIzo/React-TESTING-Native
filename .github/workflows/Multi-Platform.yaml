@@ -50,6 +50,9 @@ jobs:
           
       - name: Install Node Deps
         run: npm install
+
+      - name: Grant Gradle permission
+        run: chmod +x android/gradlew
         
       - name: Build Android Release
         run: |
