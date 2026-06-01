@@ -1,4 +1,4 @@
-name: Test iOS Certificate
+name: Test iOS Signing Assets
 
 permissions:
   contents: read
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  inspect-certificate:
+  inspect-signing:
     runs-on: macos-latest
 
     steps:
@@ -25,16 +25,7 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
-      - name: Decode P12 Certificate
-        env:
-          CERT_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
-        run: |
-          echo "$CERT_BASE64" | base64 --decode > certificate.p12
-
-          echo "✅ certificate.p12 created"
-          ls -lh certificate.p12
-
-      - name: Create Temporary Keychain
+      - name: Create Keychain
         env:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
@@ -43,33 +34,14 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           security set-keychain-settings -t 3600 -u build.keychain
 
-      - name: Inspect Share Certificate
-        run: |
-          echo "${{ secrets.SHARE_CERT_BASE64 }}" | base64 --decode > share.p12
-      
-          security import share.p12 \
-            -k build.keychain \
-            -P "${{ secrets.SHARE_CERT_PASSWORD }}" \
-            -T /usr/bin/codesign
-    
-          echo "===== CERTIFICATES ====="
-          security find-identity -v -p codesigning build.keychain
-
-      - name: Inspect Provisioning Profile
-        run: |
-          security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision > profile.plist
-      
-          echo "Profile Name:"
-          grep -A1 "<key>Name</key>" profile.plist
-      
-          echo "Application Identifier:"
-          grep -A2 "application-identifier" profile.plist
-
-      - name: Import Certificate
+      - name: Import Main Certificate
         env:
+          CERT_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
           CERT_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
+          echo "$CERT_BASE64" | base64 --decode > certificate.p12
+
           security import certificate.p12 \
             -k build.keychain \
             -P "$CERT_PASSWORD" \
@@ -81,42 +53,109 @@ jobs:
             -k "$KEYCHAIN_PASSWORD" \
             build.keychain
 
-      - name: Show Installed Signing Identities
+      - name: Import Share Certificate
+        env:
+          SHARE_CERT_BASE64: ${{ secrets.SHARE_CERT_BASE64 }}
+          SHARE_CERT_PASSWORD: ${{ secrets.SHARE_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          echo "--------------------------------"
-          echo "Installed Code Signing Identities"
-          echo "--------------------------------"
+          echo "$SHARE_CERT_BASE64" | base64 --decode > share.p12
 
-          security find-identity -v -p codesigning
+          security import share.p12 \
+            -k build.keychain \
+            -P "$SHARE_CERT_PASSWORD" \
+            -T /usr/bin/codesign
 
-      - name: Export Certificate Details
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            build.keychain
+
+      - name: Install Provisioning Profiles
+        env:
+          APP_PROFILE: ${{ secrets.COMMUNITY_DISTRIBUTION }}
+          SHARE_PROFILE: ${{ secrets.SHARE_EXTENSION_PROFILE_BASE64 }}
         run: |
-          echo "--------------------------------"
-          echo "Certificate Details"
-          echo "--------------------------------"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
 
-          CERT_HASH=$(security find-identity -v -p codesigning | head -1 | awk '{print $2}')
+          echo "$APP_PROFILE" | base64 --decode > \
+            ~/Library/MobileDevice/Provisioning\ Profiles/community.mobileprovision
 
-          if [ -z "$CERT_HASH" ]; then
-            echo "❌ No signing certificate found"
-            exit 1
-          fi
+          echo "$SHARE_PROFILE" | base64 --decode > \
+            ~/Library/MobileDevice/Provisioning\ Profiles/shareextension.mobileprovision
 
-          security find-certificate -Z -a | grep -A 20 "$CERT_HASH"
+          echo "Installed Profiles:"
+          ls -lah ~/Library/MobileDevice/Provisioning\ Profiles
 
-      - name: Determine Certificate Type
+      - name: Show Signing Identities
         run: |
-          CERT_NAME=$(security find-identity -v -p codesigning | head -1)
+          echo "================================"
+          echo "INSTALLED SIGNING IDENTITIES"
+          echo "================================"
+
+          security find-identity -v -p codesigning build.keychain
+
+      - name: Show Certificate Details
+        run: |
+          echo "================================"
+          echo "CERTIFICATE DETAILS"
+          echo "================================"
+
+          security find-certificate -a -Z
+
+      - name: Inspect Provisioning Profiles
+        run: |
+          for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision
+          do
+            echo ""
+            echo "======================================"
+            echo "FILE: $(basename "$profile")"
+            echo "======================================"
+
+            security cms -D -i "$profile" > profile.plist
+
+            echo ""
+            echo "PROFILE NAME"
+            grep -A1 "<key>Name</key>" profile.plist || true
+
+            echo ""
+            echo "TEAM IDENTIFIER"
+            grep -A5 "<key>TeamIdentifier</key>" profile.plist || true
+
+            echo ""
+            echo "APPLICATION IDENTIFIER"
+            grep -A3 "application-identifier" profile.plist || true
+
+            echo ""
+            echo "EXPIRATION"
+            grep -A1 "<key>ExpirationDate</key>" profile.plist || true
+          done
+
+      - name: Check Project Signing Settings
+        run: |
+          echo "================================"
+          echo "CODE SIGN STYLE"
+          echo "================================"
+
+          grep -n "CODE_SIGN_STYLE" ios/community.xcodeproj/project.pbxproj || true
 
           echo ""
-          echo "Detected Identity:"
-          echo "$CERT_NAME"
-          echo ""
+          echo "================================"
+          echo "PROVISIONING PROFILE SPECIFIER"
+          echo "================================"
 
-          if echo "$CERT_NAME" | grep -q "Apple Development"; then
-            echo "🟡 This is a DEVELOPMENT certificate"
-          elif echo "$CERT_NAME" | grep -q "Apple Distribution"; then
-            echo "🟢 This is a DISTRIBUTION certificate"
-          else
-            echo "🔴 Unknown certificate type"
-          fi
+          grep -n "PROVISIONING_PROFILE_SPECIFIER" ios/community.xcodeproj/project.pbxproj || true
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "================================"
+          echo "SIGNING TEST COMPLETE"
+          echo "================================"
+          echo "Review:"
+          echo "1. Signing identities"
+          echo "2. Profile names"
+          echo "3. Bundle identifiers"
+          echo "4. Team identifiers"
+          echo "5. Expiration dates"
