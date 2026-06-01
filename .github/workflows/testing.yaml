@@ -55,6 +55,16 @@ jobs:
           echo "===== CERTIFICATES ====="
           security find-identity -v -p codesigning build.keychain
 
+      - name: Inspect Provisioning Profile
+        run: |
+          security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision > profile.plist
+      
+          echo "Profile Name:"
+          grep -A1 "<key>Name</key>" profile.plist
+      
+          echo "Application Identifier:"
+          grep -A2 "application-identifier" profile.plist
+
       - name: Import Certificate
         env:
           CERT_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
