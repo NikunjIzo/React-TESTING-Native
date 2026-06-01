@@ -43,6 +43,18 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           security set-keychain-settings -t 3600 -u build.keychain
 
+      - name: Inspect Share Certificate
+        run: |
+          echo "${{ secrets.SHARE_CERT_BASE64 }}" | base64 --decode > share.p12
+      
+          security import share.p12 \
+            -k build.keychain \
+            -P "${{ secrets.SHARE_CERT_PASSWORD }}" \
+            -T /usr/bin/codesign
+    
+          echo "===== CERTIFICATES ====="
+          security find-identity -v -p codesigning build.keychain
+
       - name: Import Certificate
         env:
           CERT_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
