@@ -132,6 +132,15 @@ jobs:
             grep -A1 "<key>ExpirationDate</key>" profile.plist || true
           done
 
+      - name: Show App Entitlements
+        run: |
+          echo "===== COMMUNITY ENTITLEMENTS ====="
+          cat ios/community/community.entitlements
+        
+          echo ""
+          echo "===== SHARE EXTENSION ENTITLEMENTS ====="
+          cat ios/ShareExtension/ShareExtension.entitlements
+
       - name: Check Project Signing Settings
         run: |
           echo "================================"
